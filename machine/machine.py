@@ -1,15 +1,25 @@
 import re
 from subprocess import Popen, PIPE
 import json
+import os
+import logging
 
 from docker.tls import TLSConfig
-from .helper import which
+from .helper import which, format_as_table
+from configs import create_config_from_dict, SwarmConfig
 
-LS_FIELDS = ["Name", "Active", "ActiveHost", "ActiveSwarm", "DriverName", "State", "URL", "Swarm", "Error",
+# Logging
+# 1. logger
+logger = logging.getLogger("machine")
+
+LS_FIELDS = ["Name", "Active", "ActiveHost", "ActiveSwarm", "DriverName",
+             "State", "URL", "Swarm", "Error",
              "DockerVersion", "ResponseTime"]
 
 
-class Machine:
+class Machine(object):
+    """
+    """
     def __init__(self, path="docker-machine"):
         """
         Args:
@@ -20,7 +30,13 @@ class Machine:
             raise RuntimeError("Cant find docker-machine binary (%s)" % path)
         self.path = where
 
-    def _run(self, cmd, raise_error=True):
+    def __contains__(self, machine):
+        if machine in [x["Name"] for x in self.ls(pprint=False)]:
+            return True
+        else:
+            return False
+
+    def _run(self, cmd, raise_error=True, verbose=False):
         """
         Run a docker-machine command, optionally raise error if error code != 0
 
@@ -32,6 +48,9 @@ class Machine:
         """
         cmd = [self.path] + cmd
         p = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        if verbose:
+            for line in iter(p.stdout.readline, ""):
+                logger.info(line.replace("\n", " "))
         stdout, stderr = p.communicate()
         error_code = p.returncode
         if raise_error and error_code:
@@ -93,7 +112,7 @@ class Machine:
         }
         return params
 
-    def ls(self):
+    def ls(self, pprint=True):
         """
         List machines.
 
@@ -107,7 +126,14 @@ class Machine:
         machines = []
         for line in stdout.split("\n"):
             machine = {LS_FIELDS[index]: value for index, value in enumerate(line.split(seperator))}
-            machines.append(machine)
+            if machine.get("Name"):
+                machines.append(machine)
+        if pprint:
+            print(format_as_table(data=machines,
+                                  keys=LS_FIELDS,
+                                  header=LS_FIELDS,
+                                  sort_by_key=None,
+                                  sort_order_reverse=False))
         return machines
 
     def exists(self, machine="default"):
@@ -206,7 +232,7 @@ class Machine:
         self._run(cmd)
         return True
 
-    def env(self, machine="default"):
+    def env(self, machine="default", swarm=False):
         """
         Get the environment variables to configure docker to connect to the specified docker machine.
 
@@ -216,8 +242,19 @@ class Machine:
             str: A set of environment variables
         """
         cmd = ["env", machine]
+        if swarm:
+            cmd.append("--swarm")
         stdout, _, _ = self._run(cmd)
         return stdout.split()
+
+    def eval_env(self, machine="default", swarm=False):
+        """
+        """
+        tmp = self.env(machine=machine, swarm=swarm)
+        env_tuple = map(lambda x: tuple(x.split("=")), [tmp[1], tmp[3], tmp[5], tmp[7]])
+        for var, value in env_tuple:
+            os.environ[var] = value.replace('"', "")
+        return True
 
     def inspect(self, machine="default"):
         """
@@ -326,3 +363,73 @@ class Machine:
         cmd = ["scp"] + r + [source, destination]
         stdout, _, _ = self._run(cmd)
         return stdout.split()
+
+    def create(self, name, driver_name, driver_config={}, engine_opts=[],
+               engine_labels=[], swarm=False, swarm_options={}, verbose=False):
+        """
+        Create a machine host given a driver configuration.
+            inspired by: https://github.com/jgrowl/docker-machine-py/tree/master/docker_machine
+
+        Supported driver:
+            ['amazonec2', 'azure', 'digitalocean', 'exoscale', 'google', 'generic', 'hyperv',
+             'openstack', 'rackspace', 'softlayer', 'virtualbox', 'vmwarevcloudair',
+             'vmwarefusion', 'vmwarevsphere']
+
+        Args:
+            name (str): name of the machine
+            driver_name (str): one among supported drivers
+            driver_config (dict): options for your drivers
+            engine_opts (list(str)): flag options for created engine
+            engine_labels (list(str)): labels for the created engine
+            swarm: (bool): flag for activate swarm
+            swarm_options: (dict): options for swarm
+            verbose (bool): flag to choose to print every line from docker-machine cli output
+
+        """
+        # ensure machine doesn't exist yet:
+        if self.__contains__(name):
+            raise ValueError("Machine %s already exists" % name)
+
+        cmd = ['create']
+        driver_config = create_config_from_dict(driver_name, driver_config)
+
+        # Driver options
+        if driver_config is None:
+            cmd.extend(['--driver', 'none', '--url', 'localhost'])
+        else:
+            cmd.extend(driver_config.args())
+
+        # Engine options
+        if engine_opts:
+            for opt in engine_opts:
+                cmd.append("--engine-opt={}".format(opt))
+
+        # Engine labels
+        if engine_labels:
+            for label in engine_labels:
+                cmd.append("--engine-label={}".format(label))
+
+        # Swarm and swarm options
+        if swarm:
+            cmd.append("--swarm")
+        if swarm_options:
+            swarm_config = SwarmConfig(**swarm_options)
+            cmd.extend(swarm_config.args())
+
+        # Name of the machine
+        cmd.append(name)
+
+        try:
+            stdout, _, _ = self._run(cmd, verbose=verbose)
+            return stdout.split()
+        except RuntimeError, e:
+            print(e)
+            self.rm(machine=name, force=True)
+            raise RuntimeError(e)
+        except KeyboardInterrupt, e:
+            print(e)
+            self.rm(machine=name, force=True)
+            return False
+            raise RuntimeError(e)
+
+
