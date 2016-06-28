@@ -7,6 +7,8 @@ import logging
 from docker.tls import TLSConfig
 from .helper import which, format_as_table
 from configs import create_config_from_dict, SwarmConfig
+from .errors import MachineNotFoundError, MachineAlreadyExistsError
+
 
 # Logging
 # 1. logger
@@ -145,12 +147,22 @@ class Machine(object):
         Returns:
             bool
         """
-        cmd = ["ls", "--filter", "NAME=" + machine, "--format", "{{.Name}}"]
-        stdout, _, _ = self._run(cmd)
-        for line in stdout.split():
-            if line == machine:
-                return True
-        return False
+        # cmd = ["ls", "--filter", "NAME=" + machine, "--format", "{{.Name}}"]
+        # stdout, _, _ = self._run(cmd)
+        # for line in stdout.split():
+        #     if line == machine:
+        #         return True
+        # return False
+        if machine in self:
+            return True
+        else:
+            return False
+
+    def check_if_exists(self, machine="default"):
+        if machine in self:
+            return True
+        else:
+            raise MachineNotFoundError("No machine named %s found" % machine)
 
     def status(self, machine="default"):
         """
@@ -163,9 +175,11 @@ class Machine(object):
             bool: status of machine
 
         """
-        cmd = ["status", machine]
-        stdout, _, _ = self._run(cmd)
-        return stdout.strip() == "Running"
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["status", machine]
+            stdout, _, _ = self._run(cmd)
+            return stdout.strip() == "Running"
 
     def stop(self, machine="default"):
         """
@@ -174,9 +188,11 @@ class Machine(object):
         Args:
             machine (str): the name of the machine
         """
-        cmd = ["stop", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["stop", machine]
+            self._run(cmd)
+            return True
 
     def start(self, machine="default"):
         """
@@ -187,9 +203,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["start", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["start", machine]
+            self._run(cmd)
+            return True
 
     def provision(self, machine="default"):
         """
@@ -200,9 +218,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["provision", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["provision", machine]
+            self._run(cmd)
+            return True
 
     def regenerate_certs(self, machine="default"):
         """
@@ -213,9 +233,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["regenerate-certs", "--force", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["regenerate-certs", "--force", machine]
+            self._run(cmd)
+            return True
 
     def rm(self, machine="default", force=False):
         """
@@ -227,25 +249,30 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        f = ["-f"] if force else []
-        cmd = ["rm", "-y"] + f + [machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            f = ["-f"] if force else []
+            cmd = ["rm", "-y"] + f + [machine]
+            self._run(cmd)
+            return True
 
     def env(self, machine="default", swarm=False):
         """
-        Get the environment variables to configure docker to connect to the specified docker machine.
+        Get the environment variables to configure docker to connect
+        to the specified docker machine.
 
         Args:
             machine (str): the name of the machine
         Returns:
             str: A set of environment variables
         """
-        cmd = ["env", machine]
-        if swarm:
-            cmd.append("--swarm")
-        stdout, _, _ = self._run(cmd)
-        return stdout.split()
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["env", machine]
+            if swarm:
+                cmd.append("--swarm")
+            stdout, _, _ = self._run(cmd)
+            return stdout.split()
 
     def eval_env(self, machine="default", swarm=False):
         """
@@ -265,9 +292,11 @@ class Machine(object):
         Returns:
             dict: A nested dicht with inspect information about the machine.
         """
-        cmd = ["inspect", machine]
-        stdout, _, _ = self._run(cmd)
-        return json.loads(stdout)
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["inspect", machine]
+            stdout, _, _ = self._run(cmd)
+            return json.loads(stdout)
 
     def ip(self, machine="default"):
         """
@@ -278,9 +307,11 @@ class Machine(object):
         Returns:
             str: the IP address of a machine.
         """
-        cmd = ["ip", machine]
-        stdout, _, _ = self._run(cmd)
-        return stdout.strip()
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["ip", machine]
+            stdout, _, _ = self._run(cmd)
+            return stdout.strip()
 
     def kill(self, machine="default"):
         """
@@ -291,9 +322,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["kill", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["kill", machine]
+            self._run(cmd)
+            return True
 
     def restart(self, machine="default"):
         """
@@ -304,9 +337,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["restart", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["restart", machine]
+            self._run(cmd)
+            return True
 
     def upgrade(self, machine="default"):
         """
@@ -317,9 +352,11 @@ class Machine(object):
         Returns:
             bool: True if successful
         """
-        cmd = ["upgrade", machine]
-        self._run(cmd)
-        return True
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["upgrade", machine]
+            self._run(cmd)
+            return True
 
     def url(self, machine="default"):
         """
@@ -330,9 +367,11 @@ class Machine(object):
         Returns:
             str: the URL of a machine
         """
-        cmd = ["url", machine]
-        stdout, _, _ = self._run(cmd)
-        return stdout.strip()
+        # be sure machine exists
+        if self.check_if_exists(machine):
+            cmd = ["url", machine]
+            stdout, _, _ = self._run(cmd)
+            return stdout.strip()
 
     def active(self):
         """
@@ -385,10 +424,14 @@ class Machine(object):
             swarm_options: (dict): options for swarm
             verbose (bool): flag to choose to print every line from docker-machine cli output
 
+        Return:
+            bool: True if machine successfully created False otherwise
+
         """
+
         # ensure machine doesn't exist yet:
-        if self.__contains__(name):
-            raise ValueError("Machine %s already exists" % name)
+        if name in self:
+            raise MachineAlreadyExistsError("Machine %s already exists" % name)
 
         cmd = ['create']
         driver_config = create_config_from_dict(driver_name, driver_config)
@@ -421,7 +464,7 @@ class Machine(object):
 
         try:
             stdout, _, _ = self._run(cmd, verbose=verbose)
-            return stdout.split()
+            return True
         except RuntimeError, e:
             print(e)
             self.rm(machine=name, force=True)

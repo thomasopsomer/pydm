@@ -91,5 +91,3 @@ def format_as_table(data,
         formatted_data += format % tuple(data_to_format)
     return formatted_data
 
-
-
