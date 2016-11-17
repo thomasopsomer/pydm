@@ -114,7 +114,7 @@ class Machine(object):
         }
         return params
 
-    def ls(self, pprint=True):
+    def ls(self, timeout=10, pprint=True):
         """
         List machines.
 
@@ -123,7 +123,7 @@ class Machine(object):
         """
         seperator = "\t"
         fields = seperator.join(["{{.%s}}" % i for i in LS_FIELDS])
-        cmd = ["ls", "-f", fields]
+        cmd = ["ls", "-t", str(timeout), "-f", fields]
         stdout, stderr, errorcode = self._run(cmd)
         machines = []
         for line in stdout.split("\n"):

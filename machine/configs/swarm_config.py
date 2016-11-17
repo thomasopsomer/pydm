@@ -26,7 +26,7 @@ class SwarmConfig(object):
         """
         args_list = []
         for k, v in vars(self).iteritems():
-            if k == "swarm_master":
+            if k == "swarm_master" and v is True:
                 args_list.append(self._format_key(k))
             else:
                 key = self._format_key(k)
